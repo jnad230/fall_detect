@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+    <h2>Fall Detector</h2>
+    <button onclick="start()">Start Streaming</button>
+    <p id="status">Not started</p>
+
+    <script>
+        async function start() {
+            document.getElementById('status').innerText = 'Requesting permission...';
+
+            try {
+                const permission = await DeviceMotionEvent.requestPermission();
+                document.getElementById('status').innerText = 'Permission: ' + permission;
+
+                if (permission === 'granted') {
+
+                    let lastSend = 0;
+                    let sending = false;
+
+                    window.addEventListener('devicemotion', (e) => {
+                        const now = Date.now();
+                        if (now - lastSend < 100) return;
+                        if (sending) return;  // don't pile up requests
+                        lastSend = now;
+                        sending = true;
+
+                        fetch('https://LOCAL_URL/data', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ax: e.acceleration.x, ay: e.acceleration.y, az: e.acceleration.z, t: Date.now() })
+                        })
+                            .then(() => sending = false)
+                            .catch(e => {
+                                sending = false;
+                                document.getElementById('status').innerText = 'Fetch error: ' + e.message;
+                            });
+                    });
+
+
+                }
+            } catch (e) {
+                document.getElementById('status').innerText = 'Error: ' + e.message;
+            }
+        }
+    </script>
+</body>
+
+</html>
