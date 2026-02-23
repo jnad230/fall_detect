@@ -9,38 +9,25 @@
     <script>
         async function start() {
             document.getElementById('status').innerText = 'Requesting permission...';
-
+            
             try {
                 const permission = await DeviceMotionEvent.requestPermission();
                 document.getElementById('status').innerText = 'Permission: ' + permission;
-
+                
                 if (permission === 'granted') {
-
-                    let lastSend = 0;
-                    let sending = false;
-
-                    window.addEventListener('devicemotion', (e) => {
-                        const now = Date.now();
-                        if (now - lastSend < 100) return;
-                        if (sending) return;  // don't pile up requests
-                        lastSend = now;
-                        sending = true;
-
-                        fetch('https://LOCAL_URL/data', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ax: e.acceleration.x, ay: e.acceleration.y, az: e.acceleration.z, t: Date.now() })
-                        })
-                            .then(() => sending = false)
-                            .catch(e => {
-                                sending = false;
-                                document.getElementById('status').innerText = 'Fetch error: ' + e.message;
-                            });
-                    });
-
-
+                window.addEventListener('devicemotion', (e) => {
+                    document.getElementById('status').innerText = 
+                    `ax:${e.acceleration.x?.toFixed(2)} ay:${e.acceleration.y?.toFixed(2)} az:${e.acceleration.z?.toFixed(2)}`;
+                    
+                    // fetch('https://lanie-nonwashable-unaidedly.ngrok-free.app/data', {
+                    fetch('https://LAPTOP_IP:8080/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ax: e.acceleration.x, ay: e.acceleration.y, az: e.acceleration.z, t: Date.now() })
+                    }).catch(e => document.getElementById('status').innerText = 'Fetch error: ' + e.message);
+                });
                 }
-            } catch (e) {
+            } catch(e) {
                 document.getElementById('status').innerText = 'Error: ' + e.message;
             }
         }
