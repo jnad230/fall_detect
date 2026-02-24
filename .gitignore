@@ -1,3 +1,3 @@
 .env
 *.pem
-sensor.html
+frontend/sensor.html

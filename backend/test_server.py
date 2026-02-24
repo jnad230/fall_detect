@@ -5,8 +5,16 @@ from flask_cors import CORS
 import logging
 from dotenv import load_dotenv
 import os
+from twilio.rest import Client
 
 load_dotenv()
+
+TWILIO_SID = os.getenv('TWILIO_SID')
+TWILIO_TOKEN = os.getenv('TWILIO_TOKEN')
+TWILIO_FROM = os.getenv('TWILIO_FROM')
+TWILIO_TO = os.getenv('TWILIO_TO')
+
+client = Client(TWILIO_SID, TWILIO_TOKEN)
 
 SSL_CERT = os.getenv('SSL_CERT')
 SSL_KEY = os.getenv('SSL_KEY')
@@ -86,7 +94,12 @@ def receive_data():
 
                 if ANGLE_MIN <= angle <= ANGLE_MAX:
                     print("🚨 FALL DETECTED!")
-                    # TODO: Twilio SMS goes here
+                    client.messages.create(
+                        body="🚨 Fall detected! Please check on your person immediately.",
+                        from_=TWILIO_FROM,
+                        to=TWILIO_TO
+                    )
+                    print("SMS sent!")
                 else:
                     print(f"No fall — angle {angle:.1f}° outside range")
 
