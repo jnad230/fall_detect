@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FallGuard — Caregiver Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="dashboard.css"/>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">FG</div>
+    FallGuard
+  </div>
+  <div class="header-right">
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="conn-badge offline" id="connBadge">
+      <div class="dot"></div>
+      <span id="connText">WAITING</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- Status -->
+  <div class="status-card monitoring" id="statusCard">
+    <div class="status-icon" id="statusIcon">✅</div>
+    <div class="status-text">
+      <div class="status-label">System Status</div>
+      <div class="status-value" id="statusValue">Monitoring</div>
+      <div class="status-sub" id="statusSub">No falls detected. Sensor is active.</div>
+    </div>
+    <div class="status-time" id="statusTime">—</div>
+  </div>
+
+  <!-- Activity Monitor -->
+  <div class="activity-card">
+    <div class="card-header">
+      <div class="card-title">Activity Monitor</div>
+      <div class="activity-level" id="activityLevel">STILL</div>
+    </div>
+    <canvas id="activityCanvas" height="180"></canvas>
+  </div>
+
+  <!-- Right panel -->
+  <div class="right-panel">
+
+    <!-- Falls this session -->
+    <div class="falls-card">
+      <div class="card-title">Falls This Session</div>
+      <div class="falls-number zero" id="fallNumber">0</div>
+      <div class="falls-sub">since monitoring began</div>
+    </div>
+
+    <!-- Monitor info -->
+    <div class="sensor-card">
+      <div class="card-title">Monitor Info</div>
+      <div class="sensor-rows">
+        <div class="sensor-row">
+          <div class="sensor-key">Sensor</div>
+          <div class="sensor-val">iPhone (IMU)</div>
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-key">Status</div>
+          <div class="sensor-val green" id="sensorStatus">Active</div>
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-key">Last Seen</div>
+          <div class="sensor-val" id="lastSeen">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Falls over time -->
+  <div class="falls-plot-card">
+    <div class="card-header">
+      <div class="card-title">Falls Over Time</div>
+      <div class="activity-level" id="plotEmpty">NO FALLS YET</div>
+    </div>
+    <canvas id="fallsCanvas" height="180"></canvas>
+  </div>
+</main>
+
+<!-- Modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-icon">🚨</div>
+    <div class="modal-title">FALL DETECTED</div>
+    <div class="modal-sub" id="modalSub">A fall has been confirmed. Please check on the patient immediately.</div>
+    <div class="modal-sms">✓ SMS ALERT SENT TO CAREGIVER</div>
+    <button class="dismiss-btn" onclick="dismiss()">Dismiss Alert</button>
+  </div>
+</div>
+
+<script src="dashboard.js"></script>
+</body>
+</html>

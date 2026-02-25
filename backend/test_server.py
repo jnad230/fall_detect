@@ -1,11 +1,14 @@
 import math
 import time
-from flask import Flask, request
+import json
+from flask import Flask, request, Response, stream_with_context
 from flask_cors import CORS
 import logging
 from dotenv import load_dotenv
 import os
 from twilio.rest import Client
+import queue
+import threading
 
 load_dotenv()
 
@@ -20,8 +23,23 @@ SSL_CERT = os.getenv('SSL_CERT')
 SSL_KEY = os.getenv('SSL_KEY')
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
-
 CORS(app)
+
+# SSE client queues — one per connected dashboard
+sse_clients = []
+sse_lock = threading.Lock()
+
+def push_event(data: dict):
+    """Push an event to all connected SSE clients."""
+    with sse_lock:
+        dead = []
+        for q in sse_clients:
+            try:
+                q.put_nowait(data)
+            except queue.Full:
+                dead.append(q)
+        for q in dead:
+            sse_clients.remove(q)
 
 # --- Gravity vector recorded while standing ---
 g_before = None
@@ -42,7 +60,6 @@ def magnitude(ax, ay, az):
     return math.sqrt(ax**2 + ay**2 + az**2)
 
 def compute_rotation_angle(g1, g2):
-    # Dot product to find angle between two gravity vectors
     dot = g1[0]*g2[0] + g1[1]*g2[1] + g1[2]*g2[2]
     mag1 = magnitude(*g1)
     mag2 = magnitude(*g2)
@@ -55,6 +72,40 @@ def compute_rotation_angle(g1, g2):
 def index():
     return app.send_static_file('sensor.html')
 
+@app.route('/dashboard')
+def dashboard():
+    return app.send_static_file('dashboard.html')
+
+@app.route('/events')
+def events():
+    """SSE endpoint for the dashboard."""
+    q = queue.Queue(maxsize=50)
+    with sse_lock:
+        sse_clients.append(q)
+
+    def stream():
+        try:
+            while True:
+                try:
+                    data = q.get(timeout=15)
+                    yield f"data: {json.dumps(data)}\n\n"
+                except queue.Empty:
+                    # Heartbeat to keep connection alive
+                    yield ": heartbeat\n\n"
+        except GeneratorExit:
+            with sse_lock:
+                if q in sse_clients:
+                    sse_clients.remove(q)
+
+    return Response(
+        stream_with_context(stream()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no'
+        }
+    )
+
 @app.route('/data', methods=['POST'])
 def receive_data():
     global g_before, state, impact_time, g_after
@@ -66,6 +117,9 @@ def receive_data():
     ay = data['ay'] / 9.81
     az = data['az'] / 9.81
     a_mag = magnitude(ax, ay, az)
+
+    # Always push raw data to dashboard
+    push_event({'ax': ax, 'ay': ay, 'az': az, 'mag': a_mag, 'event': None})
 
     # Step 1: record g_before while standing (first ~1g reading)
     if g_before is None:
@@ -80,13 +134,13 @@ def receive_data():
             print(f"Impact detected! |a| = {a_mag:.2f}g")
             state = 'impact'
             impact_time = time.time()
+            push_event({'ax': ax, 'ay': ay, 'az': az, 'mag': a_mag, 'event': 'impact'})
 
     # Step 3: impact state - wait for stillness
     elif state == 'impact':
         elapsed = time.time() - impact_time
 
         if elapsed > T_THRESHOLD:
-            # Check if lying still
             if abs(a_mag - 1.0) < G_THRESHOLD:
                 g_after = (ax, ay, az)
                 angle = compute_rotation_angle(g_before, g_after)
@@ -94,25 +148,26 @@ def receive_data():
 
                 if ANGLE_MIN <= angle <= ANGLE_MAX:
                     print("🚨 FALL DETECTED!")
-                    client.messages.create(
-                        body="🚨 Fall detected! Please check on your person immediately.",
-                        from_=TWILIO_FROM,
-                        to=TWILIO_TO
-                    )
+                    push_event({'ax': ax, 'ay': ay, 'az': az, 'mag': a_mag, 'event': 'fall'})
+                    # client.messages.create(
+                    #     body="🚨 Fall detected! Please check on your person immediately.",
+                    #     from_=TWILIO_FROM,
+                    #     to=TWILIO_TO
+                    # )
                     print("SMS sent!")
                 else:
                     print(f"No fall — angle {angle:.1f}° outside range")
+                    push_event({'ax': ax, 'ay': ay, 'az': az, 'mag': a_mag, 'event': 'reset'})
 
                 state = 'monitoring'
             elif elapsed > 5.0:
-                # Timed out waiting for stillness
                 print("Impact timeout — resetting")
                 state = 'monitoring'
+                push_event({'ax': ax, 'ay': ay, 'az': az, 'mag': a_mag, 'event': 'reset'})
 
     return 'ok'
 
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
-# app.run(host='0.0.0.0', port=8080)
-app.run(host='0.0.0.0', port=8080, ssl_context=(SSL_CERT, SSL_KEY))
+app.run(host='0.0.0.0', port=8080, ssl_context=(SSL_CERT, SSL_KEY), threaded=True)
