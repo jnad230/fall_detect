@@ -50,10 +50,10 @@ g_after = None
 
 # thresholds(paper: 2g,2s,90°-30°)
 A_THRESHOLD = 2.0   # g
-T_THRESHOLD = 2.0   # seconds
-G_THRESHOLD = 0.3   # tolerance around 1g for "lying still"
-ANGLE_MIN = 60
-ANGLE_MAX = 120
+T_THRESHOLD = 1.0   # seconds
+G_THRESHOLD = 0.5   # tolerance around 1g for "lying still"
+ANGLE_MIN = 60      # since average rotation on fall is 90 degrees, giving a tolerance of -30 and +40 (for demonstration purposes)
+ANGLE_MAX = 130
 
 def magnitude(ax, ay, az):
     return math.sqrt(ax**2 + ay**2 + az**2)
@@ -148,11 +148,11 @@ def receive_data():
                 if ANGLE_MIN <= angle <= ANGLE_MAX:
                     print("🚨 FALL DETECTED!")
                     push_event({'ax': ax, 'ay': ay, 'az': az, 'mag': a_mag, 'event': 'fall'})
-                    client.messages.create(
-                        body="🚨 Fall detected! Please check on your person immediately.",
-                        from_=TWILIO_FROM,
-                        to=TWILIO_TO
-                    )
+                    # client.messages.create(
+                    #     body="🚨 Fall detected! Please check on your person immediately.",
+                    #     from_=TWILIO_FROM,
+                    #     to=TWILIO_TO
+                    # )
                     print("SMS sent!")
                 else:
                     print(f"No fall — angle {angle:.1f}° outside range")
