@@ -7,25 +7,60 @@
     <p id="status">Not started</p>
 
     <script>
+        let motionTimeout;
+        let sending = false;
+        let lastSend = 0;
+
+        function handleMotion(e) {
+            // if no events for 2s, re-attach listener
+            clearTimeout(motionTimeout);
+            motionTimeout = setTimeout(() => {
+                window.removeEventListener('devicemotion', handleMotion);
+                window.addEventListener('devicemotion', handleMotion);
+            }, 2000);
+
+            const now = Date.now();
+            if (now - lastSend < 100) return;
+            if (sending) return;
+            lastSend = now;
+            sending = true;
+
+            document.getElementById('status').innerText =
+                `ax:${e.acceleration.x?.toFixed(2)} ay:${e.acceleration.y?.toFixed(2)} az:${e.acceleration.z?.toFixed(2)}`;
+
+            fetch('https://Laptop_IP/data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ax: e.acceleration.x, ay: e.acceleration.y, az: e.acceleration.z, t: Date.now() })
+            })
+            .then(() => sending = false)
+            .catch(err => {
+                sending = false;
+                document.getElementById('status').innerText = 'Fetch error: ' + err.message;
+            });
+        }
+
         async function start() {
             document.getElementById('status').innerText = 'Requesting permission...';
-            
+
+            if ('wakeLock' in navigator) {
+                navigator.wakeLock.request('screen').catch(() => {});
+            }
+
+            // reattaches listener
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    window.removeEventListener('devicemotion', handleMotion);
+                    window.addEventListener('devicemotion', handleMotion);
+                }
+            });
+
             try {
                 const permission = await DeviceMotionEvent.requestPermission();
                 document.getElementById('status').innerText = 'Permission: ' + permission;
-                
+
                 if (permission === 'granted') {
-                window.addEventListener('devicemotion', (e) => {
-                    document.getElementById('status').innerText = 
-                    `ax:${e.acceleration.x?.toFixed(2)} ay:${e.acceleration.y?.toFixed(2)} az:${e.acceleration.z?.toFixed(2)}`;
-                    
-                    // fetch('https://lanie-nonwashable-unaidedly.ngrok-free.app/data', {
-                    fetch('https://LAPTOP_IP:8080/data', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ax: e.acceleration.x, ay: e.acceleration.y, az: e.acceleration.z, t: Date.now() })
-                    }).catch(e => document.getElementById('status').innerText = 'Fetch error: ' + e.message);
-                });
+                    window.addEventListener('devicemotion', handleMotion);
                 }
             } catch(e) {
                 document.getElementById('status').innerText = 'Error: ' + e.message;

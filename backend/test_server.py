@@ -25,12 +25,11 @@ SSL_KEY = os.getenv('SSL_KEY')
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
 
-# SSE client queues — one per connected dashboard
+# SSE client queues
 sse_clients = []
 sse_lock = threading.Lock()
 
 def push_event(data: dict):
-    """Push an event to all connected SSE clients."""
     with sse_lock:
         dead = []
         for q in sse_clients:
@@ -41,15 +40,15 @@ def push_event(data: dict):
         for q in dead:
             sse_clients.remove(q)
 
-# --- Gravity vector recorded while standing ---
+# g vector while standing
 g_before = None
 
-# --- State machine ---
+# state
 state = 'monitoring'
 impact_time = None
 g_after = None
 
-# Thresholds (paper: 2g, 2s, 90° ± 30°)
+# thresholds(paper: 2g,2s,90°-30°)
 A_THRESHOLD = 2.0   # g
 T_THRESHOLD = 2.0   # seconds
 G_THRESHOLD = 0.3   # tolerance around 1g for "lying still"
@@ -78,7 +77,7 @@ def dashboard():
 
 @app.route('/events')
 def events():
-    """SSE endpoint for the dashboard."""
+    # endpoint
     q = queue.Queue(maxsize=50)
     with sse_lock:
         sse_clients.append(q)
@@ -112,23 +111,23 @@ def receive_data():
 
     data = request.get_json()
 
-    # Convert m/s² to g
+    # convert m/s sqrd to g
     ax = data['ax'] / 9.81
     ay = data['ay'] / 9.81
     az = data['az'] / 9.81
     a_mag = magnitude(ax, ay, az)
 
-    # Always push raw data to dashboard
+    
     push_event({'ax': ax, 'ay': ay, 'az': az, 'mag': a_mag, 'event': None})
 
-    # Step 1: record g_before while standing (first ~1g reading)
+    #  g while standing
     if g_before is None:
         if abs(a_mag - 1.0) < G_THRESHOLD:
             g_before = (ax, ay, az)
             print(f"g_before recorded: {g_before}")
         return 'ok'
 
-    # Step 2: monitoring state - watch for impact
+    # impact detection
     if state == 'monitoring':
         if a_mag >= A_THRESHOLD:
             print(f"Impact detected! |a| = {a_mag:.2f}g")
@@ -136,7 +135,7 @@ def receive_data():
             impact_time = time.time()
             push_event({'ax': ax, 'ay': ay, 'az': az, 'mag': a_mag, 'event': 'impact'})
 
-    # Step 3: impact state - wait for stillness
+    # check for fall post impact
     elif state == 'impact':
         elapsed = time.time() - impact_time
 
@@ -149,11 +148,11 @@ def receive_data():
                 if ANGLE_MIN <= angle <= ANGLE_MAX:
                     print("🚨 FALL DETECTED!")
                     push_event({'ax': ax, 'ay': ay, 'az': az, 'mag': a_mag, 'event': 'fall'})
-                    # client.messages.create(
-                    #     body="🚨 Fall detected! Please check on your person immediately.",
-                    #     from_=TWILIO_FROM,
-                    #     to=TWILIO_TO
-                    # )
+                    client.messages.create(
+                        body="🚨 Fall detected! Please check on your person immediately.",
+                        from_=TWILIO_FROM,
+                        to=TWILIO_TO
+                    )
                     print("SMS sent!")
                 else:
                     print(f"No fall — angle {angle:.1f}° outside range")
